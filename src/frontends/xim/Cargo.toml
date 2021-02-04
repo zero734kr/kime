@@ -9,12 +9,14 @@ license = "GPL-3.0"
 [dependencies]
 kime-engine-cffi = { path = "../../engine/cffi" }
 kime-version = { path = "../../version" }
-xim = { git = "https://github.com/Riey/xim-rs", default-features = false, features = ["x11rb-server", "x11rb-xcb"] }
-# xim = { path = "../../../../xim-rs", default-features = false, features = ["x11rb-server", "x11rb-xcb"] }
 
 ahash = "0.6.2"
 cairo-rs = { version = "0.9.1", features = ["xcb"] }
+xcb = { version = "0.9.0", features = ["render"] }
 log = "0.4.11"
-x11rb = { version = "0.8.0", features = ["render"] }
 simplelog = "0.9.0"
 pico-args = "0.4.0"
+libc = "0.2.85"
+
+[build-dependencies]
+bindgen = "0.57.0"

@@ -13,7 +13,6 @@ use x11rb::{
     wrapper::ConnectionExt as _,
     xcb_ffi::XCBConnection,
 };
-use xim::x11rb::HasConnection;
 
 pub struct PeWindow {
     preedit_window: NonZeroU32,
