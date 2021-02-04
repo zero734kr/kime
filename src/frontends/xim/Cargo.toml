@@ -10,9 +10,7 @@ license = "GPL-3.0"
 kime-engine-cffi = { path = "../../engine/cffi" }
 kime-version = { path = "../../version" }
 
-ahash = "0.6.2"
-cairo-rs = { version = "0.9.1", features = ["xcb"] }
-xcb = { version = "0.9.0", features = ["render"] }
+# cairo-rs = { version = "0.9.1", features = ["xcb"] }
 log = "0.4.11"
 simplelog = "0.9.0"
 pico-args = "0.4.0"

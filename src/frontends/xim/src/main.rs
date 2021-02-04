@@ -13,6 +13,8 @@ mod ffi {
 
     #[link(name = "xcb-imdkit")]
     extern "C" {}
+    #[link(name = "xcb")]
+    extern "C" {}
 
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
@@ -27,12 +29,16 @@ macro_rules! cs {
 
 struct KimeInputContext {
     engine: InputEngine,
+    preedit_started: bool,
+    last_preedit_length: u32,
 }
 
 impl KimeInputContext {
     pub fn new() -> Self {
         Self {
             engine: InputEngine::new(),
+            preedit_started: false,
+            last_preedit_length: 0,
         }
     }
 }
@@ -52,47 +58,100 @@ impl KimeServer {
 const UTF8_START: &[u8] = &[0x1B, 0x25, 0x47];
 const UTF8_END: &[u8] = &[0x1B, 0x25, 0x40];
 
-fn commit_ch(im: *mut ffi::xcb_im_t, xic: *mut ffi::xcb_im_input_context_t, ch: char) {
-    unsafe {
-        let mut b = [0; 12];
-        // let s = ch.encode_utf8(&mut b);
-        // let mut c_len = 0;
-        // let c_s = ffi::xcb_utf8_to_compound_text(s.as_ptr().cast(), s.len() as _, &mut c_len);
-        // ffi::xcb_im_commit_string(im, xic, ffi::XCB_XIM_LOOKUP_CHARS, c_s, c_len as _, 0);
-        // libc::free(c_s.cast());
-        b[..3].copy_from_slice(UTF8_START);
-        let len = ch.len_utf8();
-        ch.encode_utf8(&mut b[3..len + 3]);
-        b[len + 3..len + 6].copy_from_slice(UTF8_END);
-        ffi::xcb_im_commit_string(
-            im,
-            xic,
-            ffi::XCB_XIM_LOOKUP_CHARS,
-            b.as_ptr().cast(),
-            (len + 6) as _,
-            0,
-        );
-    }
+fn make_draw_fr() -> ffi::xcb_im_preedit_draw_fr_t {
+    unsafe { std::mem::zeroed() }
 }
 
-fn commit_ch2(im: *mut ffi::xcb_im_t, xic: *mut ffi::xcb_im_input_context_t, ch1: char, ch2: char) {
-    unsafe {
-        let len1 = ch1.len_utf8();
-        let len = len1 + ch2.len_utf8();
-        let mut b = [0; 16];
-        b[..3].copy_from_slice(UTF8_START);
-        ch1.encode_utf8(&mut b[3..len1 + 3]);
-        ch2.encode_utf8(&mut b[len1 + 3..len + 3]);
-        b[len + 3..len + 6].copy_from_slice(UTF8_END);
-        ffi::xcb_im_commit_string(
-            im,
-            xic,
-            ffi::XCB_XIM_LOOKUP_CHARS,
-            b.as_ptr().cast(),
-            (len + 6) as _,
-            0,
-        );
+unsafe fn clear_preedit(
+    im: *mut ffi::xcb_im_t,
+    xic: *mut ffi::xcb_im_input_context_t,
+    ic: &mut KimeInputContext,
+) {
+    if ffi::xcb_im_input_context_get_input_style(xic) & ffi::XCB_IM_PreeditCallbacks == 0 {
+        // TODO: preedit window
+        return;
     }
+
+    debug_assert!(ic.preedit_started);
+
+    let mut fr = make_draw_fr();
+    fr.chg_length = ic.last_preedit_length;
+    fr.status = 1;
+    ffi::xcb_im_preedit_draw_callback(im, xic, &mut fr);
+    ffi::xcb_im_preedit_done_callback(im, xic);
+
+    ic.preedit_started = false;
+    ic.last_preedit_length = 0;
+}
+
+unsafe fn update_preedit(
+    im: *mut ffi::xcb_im_t,
+    xic: *mut ffi::xcb_im_input_context_t,
+    ic: &mut KimeInputContext,
+    ch: char,
+) {
+    if ffi::xcb_im_input_context_get_input_style(xic) & ffi::XCB_IM_PreeditCallbacks == 0 {
+        // TODO: preedit window
+        return;
+    }
+
+    if !ic.preedit_started {
+        ffi::xcb_im_preedit_start_callback(im, xic);
+        ic.preedit_started = true;
+    }
+
+    let mut b = [0; 12];
+    b[..3].copy_from_slice(UTF8_START);
+    let len = ch.len_utf8();
+    ch.encode_utf8(&mut b[3..len + 3]);
+    b[len + 3..len + 6].copy_from_slice(UTF8_END);
+
+    let mut fr = make_draw_fr();
+    fr.chg_length = ic.last_preedit_length;
+    fr.preedit_string = b.as_mut_ptr();
+    fr.length_of_preedit_string = (len + 6) as _;
+    fr.status = 2;
+    ic.last_preedit_length = len as _;
+    ffi::xcb_im_preedit_draw_callback(im, xic, &mut fr);
+}
+
+unsafe fn commit_ch(im: *mut ffi::xcb_im_t, xic: *mut ffi::xcb_im_input_context_t, ch: char) {
+    let mut b = [0; 12];
+    b[..3].copy_from_slice(UTF8_START);
+    let len = ch.len_utf8();
+    ch.encode_utf8(&mut b[3..len + 3]);
+    b[len + 3..len + 6].copy_from_slice(UTF8_END);
+    ffi::xcb_im_commit_string(
+        im,
+        xic,
+        ffi::XCB_XIM_LOOKUP_CHARS,
+        b.as_ptr().cast(),
+        (len + 6) as _,
+        0,
+    );
+}
+
+unsafe fn commit_ch2(
+    im: *mut ffi::xcb_im_t,
+    xic: *mut ffi::xcb_im_input_context_t,
+    ch1: char,
+    ch2: char,
+) {
+    let len1 = ch1.len_utf8();
+    let len = len1 + ch2.len_utf8();
+    let mut b = [0; 16];
+    b[..3].copy_from_slice(UTF8_START);
+    ch1.encode_utf8(&mut b[3..len1 + 3]);
+    ch2.encode_utf8(&mut b[len1 + 3..len + 3]);
+    b[len + 3..len + 6].copy_from_slice(UTF8_END);
+    ffi::xcb_im_commit_string(
+        im,
+        xic,
+        ffi::XCB_XIM_LOOKUP_CHARS,
+        b.as_ptr().cast(),
+        (len + 6) as _,
+        0,
+    );
 }
 
 unsafe extern "C" fn xcb_im_callback(
@@ -186,16 +245,16 @@ unsafe extern "C" fn xcb_im_callback(
                 }
                 InputResultType::CommitPreedit => {
                     commit_ch(im, xic, ret.char1);
-                    // preedit
+                    update_preedit(im, xic, ic, ret.char2);
                 }
                 InputResultType::Preedit => {
-                    // preedit
+                    update_preedit(im, xic, ic, ret.char1);
                 }
                 InputResultType::ToggleHangul => {
                     ic.engine.update_hangul_state();
                 }
                 InputResultType::ClearPreedit => {
-                    // clear preedit
+                    clear_preedit(im, xic, ic);
                 }
             }
         }
@@ -205,35 +264,40 @@ unsafe extern "C" fn xcb_im_callback(
     }
 }
 
-fn main_loop() -> Result<(), Box<dyn std::error::Error>> {
-    unsafe {
-        ffi::xcb_compound_text_init();
-    }
+unsafe fn main_loop(
+    conn: *mut ffi::xcb_connection_t,
+    screen_num: i32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // ffi::xcb_compound_text_init();
 
-    let (conn, screen_num) = xcb::Connection::connect(None)?;
-    let screen = conn.get_setup().roots().nth(screen_num as usize).unwrap();
-    let server_win = conn.generate_id();
-    xcb::create_window(
-        &conn,
-        xcb::COPY_FROM_PARENT as _,
-        server_win,
-        screen.root(),
-        0,
-        0,
-        1,
-        1,
-        1,
-        xcb::WINDOW_CLASS_INPUT_OUTPUT as _,
-        screen.root_visual(),
-        &[],
-    )
-    .request_check()?;
+    let (conn, server_win) = {
+        let server_win = ffi::xcb_generate_id(conn);
+        let screen = ffi::xcb_setup_roots_iterator(ffi::xcb_get_setup(conn)).data;
+        let root = (*screen).root;
+        let root_visual = (*screen).root_visual;
+        ffi::xcb_create_window(
+            conn,
+            ffi::XCB_COPY_FROM_PARENT as _,
+            server_win,
+            root,
+            0,
+            0,
+            1,
+            1,
+            1,
+            ffi::XCB_WINDOW_CLASS_INPUT_OUTPUT as _,
+            root_visual,
+            0,
+            ptr::null(),
+        );
+
+        (conn, server_win)
+    };
     let mut style_arr = [
-        ffi::XCB_IM_PreeditPosition | ffi::XCB_IM_StatusArea,
         ffi::XCB_IM_PreeditPosition | ffi::XCB_IM_StatusNothing,
         ffi::XCB_IM_PreeditPosition | ffi::XCB_IM_StatusNone,
         ffi::XCB_IM_PreeditNothing | ffi::XCB_IM_StatusNothing,
-        ffi::XCB_IM_PreeditNone | ffi::XCB_IM_StatusNone,
+        ffi::XCB_IM_PreeditCallbacks | ffi::XCB_IM_StatusNothing,
     ];
     let mut encoding_arr = [(b"COMPOUND_TEXT\0".as_ptr() as *mut u8).cast()];
     let encodings = ffi::xcb_im_encodings_t {
@@ -247,40 +311,39 @@ fn main_loop() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut server = KimeServer::new();
 
-    let im = unsafe {
-        ffi::xcb_im_create(
-            conn.get_raw_conn().cast(),
-            screen_num as _,
-            server_win,
-            cs!("kime_test"),
-            ffi::XCB_IM_ALL_LOCALES.as_ptr().cast(),
-            &input_styles,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            &encodings,
-            1,
-            Some(xcb_im_callback),
-            (&mut server as *mut KimeServer).cast(),
-        )
-    };
+    let im = ffi::xcb_im_create(
+        conn,
+        screen_num,
+        server_win,
+        cs!("kime"),
+        ffi::XCB_IM_ALL_LOCALES.as_ptr().cast(),
+        &input_styles,
+        ptr::null_mut(),
+        ptr::null_mut(),
+        &encodings,
+        1,
+        Some(xcb_im_callback),
+        (&mut server as *mut KimeServer).cast(),
+    );
 
-    unsafe {
-        if !ffi::xcb_im_open_im(im) {
-            return Err("IM open failed".into());
-        }
-        ffi::xcb_im_set_use_sync_mode(im, true);
-        ffi::xcb_im_set_use_sync_event(im, false);
+    if !ffi::xcb_im_open_im(im) {
+        return Err("IM open failed".into());
     }
+    ffi::xcb_im_set_use_sync_mode(im, true);
+    ffi::xcb_im_set_use_sync_event(im, false);
 
     log::info!("Server initialized, win: {}", server_win);
 
-    while let Some(e) = conn.wait_for_event() {
-        let handled = unsafe { ffi::xcb_im_filter_event(im, e.ptr.cast()) };
-
+    loop {
+        let e = ffi::xcb_wait_for_event(conn);
+        if e.is_null() {
+            break;
+        }
+        let handled = ffi::xcb_im_filter_event(im, e);
         if !handled {
-            match e.response_type() {
-                xcb::EXPOSE => {}
-                xcb::CONFIGURE_NOTIFY => {}
+            match (*e).response_type as u32 {
+                ffi::XCB_EXPOSE => {}
+                ffi::XCB_CONFIGURE_NOTIFY => {}
                 e => {
                     log::trace!("Unfiltered event: {:?}", e);
                 }
@@ -288,10 +351,8 @@ fn main_loop() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    unsafe {
-        ffi::xcb_im_close_im(im);
-        ffi::xcb_im_destroy(im);
-    }
+    ffi::xcb_im_close_im(im);
+    ffi::xcb_im_destroy(im);
 
     log::info!("Server exited");
 
@@ -327,7 +388,12 @@ fn main() {
 
     log::info!("Start xim server version: {}", env!("CARGO_PKG_VERSION"));
 
-    if let Err(err) = main_loop() {
-        log::error!("{}", err);
+    unsafe {
+        let mut screen_num = 0;
+        let conn = ffi::xcb_connect(ptr::null(), &mut screen_num);
+        if let Err(err) = main_loop(conn, screen_num) {
+            log::error!("{}", err);
+        }
+        ffi::xcb_disconnect(conn);
     }
 }
