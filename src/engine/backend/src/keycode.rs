@@ -5,7 +5,7 @@ use serde::{
     de::{Error, Unexpected},
     Deserialize, Serialize,
 };
-use strum::{Display, EnumString};
+use strum::{Display, EnumCount, EnumString};
 
 bitflags::bitflags! {
     #[repr(transparent)]
@@ -19,7 +19,9 @@ bitflags::bitflags! {
 
 // TODO: complete
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, EnumString, Display, Enum)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, EnumString, Display, Enum, EnumCount,
+)]
 pub enum KeyCode {
     #[strum(to_string = "1")]
     One,

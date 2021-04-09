@@ -1,6 +1,6 @@
 use enum_map::{enum_map, Enum, EnumMap};
 use enumset::EnumSetType;
-use kime_engine_backend::{Key, KeyCode, ModifierState};
+use kime_engine_backend::{Key, KeyCode, KeyMap, ModifierState};
 use kime_engine_backend_hangul::{HangulConfig, HangulData};
 use kime_engine_backend_latin::{LatinConfig, LatinData};
 use maplit::btreemap;
@@ -137,8 +137,8 @@ impl Default for RawConfig {
 pub struct Config {
     pub default_category: InputCategory,
     pub global_category_state: bool,
-    pub category_hotkeys: EnumMap<InputCategory, Vec<(Key, Hotkey)>>,
-    pub mode_hotkeys: EnumMap<InputMode, Vec<(Key, Hotkey)>>,
+    pub category_hotkeys: EnumMap<InputCategory, KeyMap<Hotkey>>,
+    pub mode_hotkeys: EnumMap<InputMode, KeyMap<Hotkey>>,
     pub icon_color: IconColor,
     pub xim_preedit_font: (String, f64),
     pub hangul_data: HangulData,
