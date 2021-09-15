@@ -2,14 +2,14 @@ mod config;
 mod os;
 
 #[cfg(unix)]
-pub use config::load_from_config_dir as config_load_from_config_dir;
-pub use config::{
+pub use self::config::load_from_config_dir as config_load_from_config_dir;
+pub use self::config::{
     Config, DaemonConfig, DaemonModule, EngineConfig, EnumSet, Hotkey, IconColor, IndicatorConfig,
     InputCategory, InputMode, LevelFilter, LogConfig, RawConfig,
 };
 pub use kime_engine_backend::{InputResult, Key, KeyCode, KeyMap, ModifierState};
 
-use config::{HotkeyBehavior, HotkeyResult};
+use self::config::{HotkeyBehavior, HotkeyResult};
 use os::{DefaultOsContext, OsContext};
 
 use kime_engine_backend::{InputEngineBackend, InputEngineMode, InputEngineModeResult};

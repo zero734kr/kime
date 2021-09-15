@@ -72,10 +72,21 @@ impl Config {
 #[cfg(unix)]
 pub fn load_from_config_dir() -> Option<(Config, DaemonConfig, IndicatorConfig, LogConfig)> {
     let dir = xdg::BaseDirectories::with_prefix("kime").ok()?;
-    let config: RawConfig = dir
-        .find_config_file("config.yaml")
-        .and_then(|config| serde_yaml::from_reader(std::fs::File::open(config).ok()?).ok())
-        .unwrap_or_default();
+
+    let mut s = ::config::Config::new();
+
+    let mut configs = dir.list_config_files("configs");
+    configs.sort_unstable();
+
+    for c in configs {
+        s.merge(::config::File::from(c)).ok()?;
+    }
+
+    if let Ok(path) = std::env::var("KIME_CONFIG") {
+        s.merge(::config::File::with_name(&path)).ok()?;
+    }
+
+    let config: RawConfig = s.try_into().ok()?;
 
     Some((
         Config::from_engine_config_with_dir(config.engine, &dir),

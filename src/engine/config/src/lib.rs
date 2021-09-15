@@ -107,7 +107,6 @@ pub struct IndicatorConfig {
 
 #[derive(Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(default))]
 pub struct DaemonConfig {
     pub modules: EnumSet<DaemonModule>,
 }
@@ -121,7 +120,6 @@ impl Default for DaemonConfig {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(default))]
 pub struct LogConfig {
     pub global_level: log::LevelFilter,
 }
@@ -135,7 +133,6 @@ impl Default for LogConfig {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(default))]
 pub struct EngineConfig {
     pub default_category: InputCategory,
     pub global_category_state: bool,
@@ -191,7 +188,6 @@ impl Default for EngineConfig {
 
 #[derive(Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(default))]
 pub struct RawConfig {
     pub daemon: DaemonConfig,
     pub indicator: IndicatorConfig,
