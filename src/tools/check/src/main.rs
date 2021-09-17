@@ -113,29 +113,29 @@ impl Check {
             }
             Check::Config => {
                 let dirs = xdg::BaseDirectories::with_prefix("kime").expect("Load xdg dirs");
-                let config_path = match dirs.find_config_file("config.yaml") {
-                    Some(path) => path,
-                    _ => {
-                        return CondResult::Ignore(
-                            "User config not exists will use default config".into(),
-                        )
+                let configs = dirs.list_config_files("configs");
+
+                if configs.is_empty() {
+                    CondResult::Ignore("Can't find any config kime will use default config".into())
+                } else {
+                    let mut s = config::Config::new();
+
+                    for c in configs {
+                        println!("Loading config: {}", c.display());
+                        s.merge(config::File::from(c)).expect("Merge config");
                     }
-                };
 
-                println!("Loading config path: {}", config_path.display());
+                    let _config: kime_engine_core::RawConfig = match s.try_into() {
+                        Ok(config) => config,
+                        Err(err) => {
+                            return CondResult::Fail(format!("Can't parse config: {}", err));
+                        }
+                    };
 
-                let _config: kime_engine_core::RawConfig = match serde_yaml::from_str(
-                    &std::fs::read_to_string(config_path).expect("Read config file"),
-                ) {
-                    Ok(config) => config,
-                    Err(err) => {
-                        return CondResult::Fail(format!("Can't parse config.yaml: {}", err))
-                    }
-                };
+                    // TODO: check layout
 
-                // TODO: check layout
-
-                CondResult::Ok
+                    CondResult::Ok
+                }
             }
             Check::XModifier => match env::var("XDG_SESSION_TYPE").unwrap().as_str() {
                 "x11" => check_var(

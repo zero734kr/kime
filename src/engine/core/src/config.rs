@@ -75,8 +75,7 @@ pub fn load_from_config_dir() -> Option<(Config, DaemonConfig, IndicatorConfig, 
 
     let mut s = ::config::Config::new();
 
-    let mut configs = dir.list_config_files("configs");
-    configs.sort_unstable();
+    let configs = dir.list_config_files("configs");
 
     for c in configs {
         s.merge(::config::File::from(c)).ok()?;
